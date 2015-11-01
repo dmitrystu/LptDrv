@@ -1,0 +1,41 @@
+#include <winver.h>
+#include "resources.h"
+#include "defines.h"
+
+/* Embedded driver */
+IDR_WINRING32 RCDATA "resources\\WinRing0x32.sys"
+IDR_WINRING64 RCDATA "resources\\WinRing0x64.sys"
+
+/* Module version information. */
+VS_VERSION_INFO    VERSIONINFO
+FILEVERSION        DRV_MAJOR, DRV_MINOR, DRV_RELEASE, DRV_VER
+PRODUCTVERSION     DRV_MAJOR, DRV_MINOR, DRV_RELEASE, DRV_VER
+FILEFLAGSMASK      VS_FFI_FILEFLAGSMASK
+FILEFLAGS          VS_FF_PRERELEASE
+FILEOS             VOS_NT_WINDOWS32
+FILETYPE           VFT_DLL
+FILESUBTYPE        VFT2_UNKNOWN
+
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904E4"
+    BEGIN
+      VALUE "CompanyName", "dmitrystu(at)gmail(dot)com"
+      VALUE "FileDescription", "WinRing0 wrapper for Postal2 ISP"
+      VALUE "FileVersion", __STR(DRV_MAJOR) "." __STR(DRV_MINOR) "." __STR(DRV_RELEASE) "." __STR(DRV_VER)
+      VALUE "InternalName", "LptDrv Emu"
+      VALUE "LegalCopyright", "2015 FDI \n 2008 Noriyuki MIYAZAKI"
+      VALUE "OriginalFilename", "LptDrv.dll"
+      VALUE "ProductName", "Postal 2 project"
+      VALUE "ProductVersion", __STR(DRV_MAJOR) "." __STR(DRV_MINOR) "." __STR(DRV_RELEASE) "." __STR(DRV_VER)
+      VALUE "Comments","Based on http://www.codeproject.com/Articles/75279/Channel-Logic-Analyzer"
+    END
+  END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1252
+    END
+END
+
+
