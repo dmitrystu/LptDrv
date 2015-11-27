@@ -38,9 +38,6 @@ UINT DrvBehavour = 2;
 DWORD lasterror = ERROR_SUCCESS;
 DWORD oldpriority = 0;
 
-#define _OK TRUE
-#define _FAIL FALSE
-
 
 
 
@@ -103,7 +100,7 @@ UINT _APICALL LptDrvGetVersionString(LPCTSTR lParam1, DWORD lParam2) {
 }
 
 UINT _APICALL LptDrvOpen(UINT LptNum, DWORD lParam2) {
-    if (LptNum >= PortCount) return _FAIL;
+    if (LptNum >= PortCount) return FALSE;
     PortCurrent = LptNum;
     /* Try to set process priority */
     oldpriority = GetPriorityClass(GetCurrentProcess());
@@ -212,9 +209,11 @@ BOOL GetConfig (HMODULE hInst) {
             if (*(char*)tPath == '#' || *(char*)tPath == ';') continue; /* Ignore comments */
             if (sscanf((char*)tPath,"extra_delay %d", &dTemp)) ExtraDelay = dTemp;
             if (sscanf((char*)tPath,"port %x", &dTemp)) {
-                PortList[PortCount] = dTemp;
-                PortCount++;
-                if (PortCount > 0x10) break;
+                if (dTemp > 0xFF && dTemp < 0x10000) {
+                    PortList[PortCount] = dTemp;
+                    PortCount++;
+                    if (PortCount > 0x10) break;
+                }
             }
             if (sscanf((char*)tPath,"keep_driver_active %d", &dTemp)) DrvBehavour = dTemp;
         }

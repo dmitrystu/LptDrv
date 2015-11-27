@@ -14,24 +14,20 @@
 
 
 
-const TCHAR* sDrvID   = _T("WinRing0_1_2_0");
-const TCHAR* sDrvFile = _T("WinRing0.sys");
-
-typedef struct {
-    ULONG PortNumber;
-    UCHAR CharData;
-} WRITE_IO_PORT_INPUT;
+const TCHAR* sDrvID    = _T("WinRing0_1_2_0");
+const TCHAR* sDrvFile  = _T("WinRing0.sys");
 
 
+TCHAR* sDrvName = NULL;
 HANDLE hDriver = INVALID_HANDLE_VALUE;
-TCHAR* sDrvName = _T("none");
+
 
 
 static DWORD OpenWR0   (LPCTSTR DriverId);
 static void  CloseWR0  (void);
 static DWORD DrvInstall(LPCTSTR sDrvID, LPCTSTR sDrvPath, BOOL bAuto);
 static DWORD DrvRemove (LPCTSTR sDrvID, BOOL bRemove);
-
+static DWORD DrvAdjust(LPCTSTR sDrvId, BOOL bAuto);
 
 DWORD  InstallWR0(HINSTANCE hinstDLL, UINT wBehavour) {
     CloseWR0();
@@ -55,16 +51,17 @@ DWORD  InstallWR0(HINSTANCE hinstDLL, UINT wBehavour) {
 }
 
 DWORD RemoveWR0(HINSTANCE hinstDLL, UINT wBehavour) {
-    DWORD dResult = ERROR_SUCCESS;
+    DWORD dResult;
     CloseWR0();
+    dResult = DrvAdjust(sDrvID, (wBehavour == 1));
     if (wBehavour == 0) {
         dResult = DrvRemove(sDrvID, 0);
     }
-    return (dResult == ERROR_SUCCESS);
+    return (ERROR_SUCCESS == dResult);
 }
 
 TCHAR* GetNameWR0(void) {
-    return sDrvName;
+    return (sDrvName) ? sDrvName : _T("none");
 }
 
 static void CloseWR0(void) {
@@ -78,8 +75,11 @@ static DWORD OpenWR0 (LPCTSTR DriverId) {
     TCHAR sDriver[MAX_PATH];
     _tcscpy(sDriver, _T("\\\\.\\"));
     _tcscat(sDriver, DriverId);
-    hDriver = CreateFile(sDriver, GENERIC_READ | GENERIC_WRITE, 0, NULL,
-            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    hDriver = CreateFile(sDriver,
+                         GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                         OPEN_EXISTING,
+                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH,
+                         NULL);
     Sleep(0);
     if (hDriver == INVALID_HANDLE_VALUE)
         return GetLastError();
@@ -88,27 +88,61 @@ static DWORD OpenWR0 (LPCTSTR DriverId) {
 
 DWORD WriteWR0(WORD wPort, BYTE bValue) {
     // Write a Byte to an I/O Port via Driver
-    DWORD u32_RetLen;
-    WRITE_IO_PORT_INPUT k_In;
-    k_In.CharData   = bValue;
-    k_In.PortNumber = wPort;
-//	WaitUs(2);
-    if (!DeviceIoControl(hDriver, IOCTL_WRITE_IO_PORT_BYTE, &k_In, sizeof(k_In),
-            NULL, 0, &u32_RetLen, NULL))
-        return GetLastError();
-    return ERROR_SUCCESS;
+    DWORD dBytes;
+    BYTE  bCount = 10;
+    struct  {
+        ULONG   uPort;
+        UCHAR   bData;
+    } sData;
+    sData.uPort = wPort;
+    sData.bData = bValue;
+    do {
+        if (DeviceIoControl(hDriver, IOCTL_WRITE_IO_PORT_BYTE, &sData, sizeof(sData), NULL, 0, &dBytes, NULL)) {
+            return ERROR_SUCCESS;
+        }
+        Sleep(0);
+    } while (bCount--);
+    return GetLastError();
 }
 
 DWORD ReadWR0(WORD wPort, BYTE* bValue) {
-    DWORD dRetLen;
+    DWORD dBytes;
     WORD  wValue;
-    if (!DeviceIoControl(hDriver, IOCTL_READ_IO_PORT_BYTE, &wPort, sizeof(wPort),
-            &wValue, sizeof(wValue), &dRetLen, NULL))
-        return GetLastError();
-
-    *bValue = (BYTE)wValue;
-    return ERROR_SUCCESS;
+    BYTE  bCount = 10;
+    do {
+        if (DeviceIoControl(hDriver, IOCTL_READ_IO_PORT_BYTE, &wPort, sizeof(wPort), &wValue, sizeof(wValue), &dBytes, NULL)) {
+            *bValue = (BYTE)wValue;
+            return ERROR_SUCCESS;
+        }
+        Sleep(0);
+    } while (bCount--);
+    return GetLastError();
 }
+
+static DWORD DrvAdjust(LPCTSTR sDrvId, BOOL bAuto) {
+    DWORD dResult = ERROR_SUCCESS;
+    SC_HANDLE hSCM = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    if (hSCM) {
+        SC_HANDLE hService = OpenService(hSCM, sDrvID, SRVICE_PERMISS);
+        if (hService) {
+            ChangeServiceConfig(hService,
+                    SERVICE_NO_CHANGE,
+                    (bAuto) ? SERVICE_AUTO_START : SERVICE_DEMAND_START,
+                    SERVICE_NO_CHANGE,
+                    NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            CloseServiceHandle(hService);
+        } else {
+            dResult = GetLastError();
+        }
+        CloseServiceHandle(hSCM);
+    } else {
+        dResult = GetLastError();
+    }
+    Sleep(0);
+    return dResult;
+}
+
+
 
 static DWORD DrvInstall(LPCTSTR sDrvID, LPCTSTR sDrvPath, BOOL bAuto) {
     DWORD dResult = ERROR_SUCCESS;
@@ -127,11 +161,6 @@ static DWORD DrvInstall(LPCTSTR sDrvID, LPCTSTR sDrvPath, BOOL bAuto) {
                 if (!hService) {
                     dResult = GetLastError();
                 } else {
-                    ChangeServiceConfig(hService,
-                            SERVICE_NO_CHANGE,
-                            (bAuto) ? SERVICE_AUTO_START : SERVICE_DEMAND_START,
-                            SERVICE_NO_CHANGE,
-                            NULL, NULL, NULL, NULL, NULL, NULL, NULL);
                     if (!StartService(hService, 0, NULL)) {
                         dResult = GetLastError();
                         if (ERROR_SERVICE_ALREADY_RUNNING == dResult) dResult = ERROR_SUCCESS;
@@ -175,5 +204,6 @@ static DWORD DrvRemove(LPCTSTR sDrvID, BOOL bRemove) {
     } else {
         dResult = GetLastError();
     }
+    Sleep(0);
     return dResult;
 }

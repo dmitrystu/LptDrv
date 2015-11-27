@@ -24,10 +24,12 @@ How to use
     Run Postal2
     Enjoy
 
-
+[3.0.2]
+    + added confugurable WinRing0 behaviour (keep_driver_active)
 [3.0.1]
     + added configuration file support
-    + added configurable extra delay
+    + added configurable extra delay in us (extra_delay)
+    + added configurable ports (port 0x<hex>)
 
 [3.0.0]
 Initial release
